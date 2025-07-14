@@ -202,11 +202,10 @@
                             <th>Nama Santri</th>
                             <th>Kelas</th>
                             <th>Nama Pembimbing</th>
-                            <th>Total Hadir</th>
+                            <!-- Removed Total Hadir and Persentase Kehadiran -->
                             <th>Alfa</th>
                             <th>Izin</th>
                             <th>Sakit</th>
-                            <th>Persentase Kehadiran</th>
                         </tr>
                     </thead>
                     <tbody id="rekapTableBody">
@@ -231,7 +230,23 @@
         // --- Firebase SDK Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, where, doc, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Added 'doc' import
+        import { getFirestore, collection, onSnapshot, query, where, doc, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Utility Functions (Moved to top for scope) ---
+        function toLocalDateString(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getMonthName(monthIndex) {
+            const months = [
+                "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+            ];
+            return months[parseInt(monthIndex, 10)];
+        }
 
         // --- Firebase Configuration ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -403,7 +418,7 @@
 
                 datesInPeriod.forEach(dateString => {
                     const isHolidayPagi = holidaysInPeriod.some(h => h.date === dateString && (h.time === "Pagi" || h.time === "Pagi & Sore"));
-                    const isHolidaySore = holidaysInPeriod.some(h => h.date === dateString && (h.time === "Sore" || h.time === "Pagi & Sore"));
+                    const isHolidaySore = holidaysInPeriod.some(h => h.date === dateString && (h.time === "Sore" || h.time === "Pagi" || h.time === "Pagi & Sore"));
 
                     if (!isHolidayPagi) {
                         possibleAttendanceSlots++;
@@ -425,7 +440,7 @@
                         const isHolidayForSession = holidaysInPeriod.some(h => 
                             h.date === submissionDateString && 
                             ((submissionSession === 'pagi' && (h.time === 'Pagi' || h.time === 'Pagi & Sore')) ||
-                             (submissionSession === 'sore' && (h.time === 'Sore' || h.time === 'Pagi' || h.time === 'Pagi & Sore'))) // Fixed: include Pagi for Sore session if it's a full day holiday
+                             (submissionSession === 'sore' && (h.time === 'Sore' || h.time === 'Pagi' || h.time === 'Pagi & Sore'))) 
                         );
 
                         if (!isHolidayForSession) { // Only count if not a holiday for that specific session
@@ -444,24 +459,16 @@
                 
                 const group = allHalaqohGroups.find(g => g.studentIds?.includes(student.id));
                 const mentor = allMentors.find(m => m.id === group?.mentorId);
-
-                // Total possible attendance slots for this student
-                // This assumes a student is expected to attend both sessions on non-holiday days.
-                // If a student only attends one session, this calculation might be off.
-                // For now, it's total available slots for both sessions.
                 
-                const percentageKehadiran = possibleAttendanceSlots > 0 ? ((totalHadir / possibleAttendanceSlots) * 100).toFixed(2) : '0.00';
-
-
                 compiledRecapData.push({
                     namaSantri: student.name,
                     kelas: student.class || '-',
                     namaPembimbing: mentor?.name || '-',
-                    totalHadir: totalHadir,
+                    // totalHadir: totalHadir, // Removed
                     alfa: totalAlpha,
                     izin: totalIzin,
                     sakit: totalSakit,
-                    persentaseKehadiran: `${percentageKehadiran}%`,
+                    // persentaseKehadiran: `${percentageKehadiran}%`, // Removed
                 });
             }
             renderTable();
@@ -496,11 +503,9 @@
                         <td>${data.namaSantri}</td>
                         <td>${data.kelas}</td>
                         <td>${data.namaPembimbing}</td>
-                        <td>${data.totalHadir}</td>
                         <td>${data.alfa}</td>
                         <td>${data.izin}</td>
                         <td>${data.sakit}</td>
-                        <td>${data.persentaseKehadiran}</td>
                     </tr>
                 `;
                 dom.rekapTableBody.innerHTML += row;
@@ -565,7 +570,7 @@
                 dataByClass[className].push(studentData);
             }
 
-            const headers = ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Total Hadir", "Alfa", "Izin", "Sakit", "Persentase Kehadiran"];
+            const headers = ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Alfa", "Izin", "Sakit"]; // Removed Total Hadir and Persentase Kehadiran
             
             const sortedClasses = Object.keys(dataByClass).sort();
 
@@ -573,7 +578,7 @@
                 const classData = dataByClass[className];
                 
                 const rows = classData.map((d, i) => [
-                    i + 1, d.namaSantri, d.kelas, d.namaPembimbing, d.totalHadir, d.alfa, d.izin, d.sakit, d.persentaseKehadiran
+                    i + 1, d.namaSantri, d.kelas, d.namaPembimbing, d.alfa, d.izin, d.sakit
                 ]);
 
                 const sheetData = [headers, ...rows];
@@ -605,22 +610,6 @@
             setTimeout(() => {
                 dom.toast.classList.remove('show');
             }, 3000);
-        }
-
-        // --- Utility Functions (Moved to top for scope) ---
-        function toLocalDateString(date) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        }
-
-        function getMonthName(monthIndex) {
-            const months = [
-                "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-                "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-            ];
-            return months[parseInt(monthIndex, 10)];
         }
 
 
